@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+.bg-background {
+  background-color: #1D1C1C;
+}
+
+.bg-primary {
+  background-color: #D24135;
+}
+
+.bg-secondary {
+  background-color: #5A5865;
+}
+
+.text-primary {
+  color: #D24135;
+}
+
+.chat-content a {
+  color: #D24135;
+}
+
+.chat-content a:hover {
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+
+/* Custom scrollbar styles */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1D1C1C;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #5A5865;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #5A5865;
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #5A5865 #1D1C1C;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #1D1C1C;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #5A5865;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #5A5865;
+}
+
+/* For Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #5A5865 #1D1C1C;
+}
+
+.message-bubble ul {
+  margin-left: 20px;
+  list-style: disc;
+}
+
+.android-chat-input {
+  margin-bottom: 20px;
+}
+
+.android-header {
+  margin-top: 55px;
+}

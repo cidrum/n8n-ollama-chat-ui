@@ -1,0 +1,301 @@
+{
+  "name": "Ollama Chat UI Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ollama-chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract input data\nconst userMessage = $input.item.json.message || '';\nconst threadId = $input.item.json.threadId || `thread_${Date.now()}`;\nconst conversationHistory = $input.item.json.history || [];\nconst systemPrompt = $input.item.json.systemPrompt || 'You are a helpful AI assistant for auction and inventory management.';\nconst user = $input.item.json.user || {};\n\n// Format conversation history for Ollama\nconst messages = [\n  {\n    role: 'system',\n    content: systemPrompt\n  },\n  ...conversationHistory.map(msg => ({\n    role: msg.role,\n    content: msg.content\n  })),\n  {\n    role: 'user',\n    content: userMessage\n  }\n];\n\n// Prepare tools/functions for Ollama\nconst tools = [\n  {\n    type: \"function\",\n    function: {\n      name: \"run_sql_query\",\n      description: \"Execute SQL queries on WooCommerce database\",\n      parameters: {\n        type: \"object\",\n        properties: {\n          query: {\n            type: \"string\",\n            description: \"The SQL query to run\"\n          }\n        },\n        required: [\"query\"]\n      }\n    }\n  },\n  {\n    type: \"function\",\n    function: {\n      name: \"generate_chart\",\n      description: \"Generate a chart based on data\",\n      parameters: {\n        type: \"object\",\n        properties: {\n          chart_type: {\n            type: \"string\",\n            enum: [\"bar\", \"line\", \"pie\", \"scatter\"]\n          },\n          title: { type: \"string\" },\n          data: { type: \"array\" },\n          x_axis: { type: \"string\" },\n          y_axis: { type: \"string\" }\n        },\n        required: [\"chart_type\", \"data\"]\n      }\n    }\n  }\n];\n\nreturn {\n  json: {\n    model: 'llama3.2',\n    messages: messages,\n    stream: false,\n    tools: tools,\n    threadId: threadId,\n    user: user\n  }\n};"
+      },
+      "id": "process_message",
+      "name": "Process Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:11434/api/chat",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\"model\": $json.model, \"messages\": $json.messages, \"stream\": false, \"tools\": $json.tools} }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "ollama_api",
+      "name": "Call Ollama API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.message.tool_calls }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check_tool_calls",
+      "name": "Check for Tool Calls",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract tool calls from Ollama response\nconst toolCalls = $input.item.json.message.tool_calls || [];\nconst results = [];\n\nfor (const toolCall of toolCalls) {\n  const functionName = toolCall.function.name;\n  const functionArgs = typeof toolCall.function.arguments === 'string' \n    ? JSON.parse(toolCall.function.arguments)\n    : toolCall.function.arguments;\n\n  results.push({\n    tool_call_id: toolCall.id || `call_${Date.now()}`,\n    function_name: functionName,\n    arguments: functionArgs\n  });\n}\n\nreturn results.map(r => ({ json: r }));"
+      },
+      "id": "extract_tool_calls",
+      "name": "Extract Tool Calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.function_name }}",
+              "rightValue": "run_sql_query",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route_tool",
+      "name": "Route Tool Call",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://webhook.surgbay.com/webhook/run-sql-query",
+        "method": "GET",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.arguments.query }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sql_query",
+      "name": "Execute SQL Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1450, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Format SQL query result\nconst queryResult = $input.item.json;\nconst toolCallId = $('Extract Tool Calls').item.json.tool_call_id;\n\nreturn {\n  json: {\n    role: 'tool',\n    tool_call_id: toolCallId,\n    content: JSON.stringify({\n      success: true,\n      results: queryResult,\n      message: \"Query executed successfully\"\n    })\n  }\n};"
+      },
+      "id": "format_sql_result",
+      "name": "Format SQL Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  \"success\": true,\n  \"response\": $json.message?.content || '',\n  \"threadId\": $('Process Message').item.json.threadId,\n  \"model\": $json.model || 'llama3.2',\n  \"created_at\": $json.created_at || $now.toISO()\n} }}"
+      },
+      "id": "response",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "final_response",
+              "name": "response",
+              "value": "={{ $json.message?.content }}",
+              "type": "string"
+            },
+            {
+              "id": "thread_id",
+              "name": "threadId",
+              "value": "={{ $('Process Message').item.json.threadId }}",
+              "type": "string"
+            },
+            {
+              "id": "success",
+              "name": "success",
+              "value": "=true",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "format_final_response",
+      "name": "Format Final Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1850, 200]
+    }
+  ],
+  "connections": {
+    "Chat Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Message": {
+      "main": [
+        [
+          {
+            "node": "Call Ollama API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Ollama API": {
+      "main": [
+        [
+          {
+            "node": "Check for Tool Calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for Tool Calls": {
+      "main": [
+        [
+          {
+            "node": "Extract Tool Calls",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Tool Calls": {
+      "main": [
+        [
+          {
+            "node": "Route Tool Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Tool Call": {
+      "main": [
+        [
+          {
+            "node": "Execute SQL Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute SQL Query": {
+      "main": [
+        [
+          {
+            "node": "Format SQL Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format SQL Result": {
+      "main": [
+        [
+          {
+            "node": "Format Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Final Response": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-13T18:00:00.000Z",
+  "versionId": "1"
+}
