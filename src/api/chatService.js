@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // N8N Chat API Configuration
-const N8N_CHAT_API = import.meta.env.VITE_N8N_CHAT_API || "https://ai.realsolutions.ai/webhook/chat/ollama";
+const N8N_CHAT_API = "https://ai.realsolutions.ai/webhook/chat/ollama";
 
 // Create axios instance for n8n chat API
 const chatClient = axios.create({
@@ -300,7 +300,7 @@ export const generateChart = async (args) => {
     }
 
     if ((chart_type === 'bar' || chart_type === 'line' || chart_type === 'scatter') &&
-        (!x_axis || !y_axis || !data[0].hasOwnProperty(x_axis) || !data[0].hasOwnProperty(y_axis))) {
+      (!x_axis || !y_axis || !data[0].hasOwnProperty(x_axis) || !data[0].hasOwnProperty(y_axis))) {
       return {
         success: false,
         error: "Missing or invalid axis fields",

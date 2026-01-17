@@ -16,10 +16,19 @@ export default defineConfig({
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-redux'],
           'ui-components': ['react-markdown', 'react-syntax-highlighter', 'exceljs'],
-          'api-libs': ['openai', 'axios']
+          'api-libs': ['axios']
         }
       }
     },
     chunkSizeWarningLimit: 1000,
+  },
+  server: {
+    proxy: {
+      '/webhook': {
+        target: 'https://ai.realsolutions.ai',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   }
 });
